@@ -1,14 +1,22 @@
 #!/bin/bash
 
+# if variable is not empty, then include it.
+# Hostname is required, if environment variable is not set, use pod name.
+if ! [ -z "$fqdn" ]; then
+    hostname="-hostname $fqdn"
+    else hostname="-hostname $(hostname -f)"
+fi
 
-# ugly but readable lel
-# if variable is not empty
 if ! [ -z "$certFile" ]; then
     certFile="-certFile $certFile"
 fi
 
 if ! [ -z "$db" ]; then
     db="-db $db"
+fi
+
+if ! [ -z "$debug" ]; then
+    db="-debug"
 fi
 
 if ! [ -z "$https" ]; then
@@ -35,12 +43,20 @@ if ! [ -z "$reverseProxyPort" ]; then
     reverseProxyPort="-reverseProxyPort $reverseProxyPort"
 fi
 
+if ! [ -z "$setEdition" ]; then
+    db="-setEdition $setEdition"
+fi
+
+if ! [ -z "$setPass" ]; then
+    db="-setPass $setPass"
+fi
+
 if ! [ -z "$sshport" ]; then
     sshport="-sshport $sshport"
 fi
 
-hostname="-hostname $(hostname -f)"
 
-echo "using following settings:" $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
 
-/app/c2_community-linux-64 $hostname $certFile $db $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $sshport
+echo "using following settings:" $hostname $certFile $db $debug $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $setEdition $setPass $sshport
+
+/app/c2_community-linux-64 $hostname $certFile $db $debug $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $setEdition $setPass $sshport

@@ -1,6 +1,6 @@
-FROM alpine:3.16
+FROM alpine:3.21.3
 
-ARG version=3.2.0_amd64_linux
+ARG version=3.4.0_amd64_linux
 
 RUN apk add ca-certificates wget unzip libc6-compat \
     && wget https://downloads.hak5.org/api/devices/cloudc2/firmwares/latest --no-cache \ 
