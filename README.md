@@ -1,4 +1,8 @@
-![Docker Pulls](https://img.shields.io/docker/pulls/lindezagrey/hak5c2?style=plastic)
+![Docker Pulls](https://img.shields.io/docker/pulls/joshuapfritz/hak5c2?style=plastic)
+
+This docker file and script have been updated to use a defined hostname using the environment variable "fqdn". If fqdn is not specified, it will revert to the container hostname. The image at [https://hub.docker.com/r/joshuapfritz/hak5c2](https://hub.docker.com/r/joshuapfritz/hak5c2) can be pulled using Docker or Kubernetes. It was created out of the need to generate device configurations using a Fully Qualified Domain Name and publicly accessable domain in a k8s cluster.
+
+The image has also been updated to Alpine 3.21.3, Hak5c2 3.4.0, and related options.
 
 # 🐋 Alpine based hak5c² container
 
