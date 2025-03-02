@@ -57,6 +57,6 @@ fi
 
 
 
-echo "using following settings:" $hostname $certFile $db $debug $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $setEdition $setPass $sshport
+echo "using following settings:" $hostname $https $keyFile $certFile $db $listenip $listenport $sshpor $reverseProxy $reverseProxyPort $setEdition $setPasst $debug
 
-/app/c2_community-linux-64 $hostname $certFile $db $debug $https $keyFile $listenip $listenport $reverseProxy $reverseProxyPort $setEdition $setPass $sshport
+/app/c2_community-linux-64 $hostname $https $keyFile $certFile $db $listenip $listenport $sshpor $reverseProxy $reverseProxyPort $setEdition $setPasst $debug
