@@ -1,0 +1,28 @@
+FROM alpine:3.21.3
+
+WORKDIR /app
+
+# Which archive to fetch and which binary inside to install.
+# RELEASE: "latest" or a pinned tag like "3.4.0-stable"
+# TARGET:  one of amd64_linux, arm64_linux, armv7_linux, i386_linux, etc.
+ARG RELEASE=latest
+ARG TARGET=amd64_linux
+
+# Runtime deps + download tools (remove wget/unzip after use to keep image small)
+RUN apk add --no-cache ca-certificates libc6-compat wget unzip \
+  && wget -O /tmp/cloudc2.zip "https://downloads.hak5.org/api/devices/cloudc2/firmwares/${RELEASE}" \
+  && unzip -d /tmp /tmp/cloudc2.zip \
+  && C2_BIN="$(find /tmp -maxdepth 1 -type f -name "c2-*_${TARGET}" | head -n1)" \
+  && test -n "$C2_BIN" \
+  && install -m 0755 "$C2_BIN" /app/c2_community-linux-64 \
+  && rm -rf /tmp/* \
+  && apk del wget unzip
+
+# Entrypoint script
+COPY run.sh /app/run.sh
+RUN chmod +x /app/run.sh
+
+# Default UI + SSH relay ports (tweak as needed)
+EXPOSE 8080 2022
+
+CMD ["/bin/ash", "/app/run.sh"]
