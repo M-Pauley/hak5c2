@@ -26,7 +26,7 @@ RUN set -eux; \
 
 # --- build stage: compile a tiny entrypoint (env -> flags, then exec /app/c2) ---
 # --- secure builder ---
-FROM cgr.dev/chainguard/go:1.22 AS wrap
+FROM cgr.dev/chainguard/go:latest AS wrap
 WORKDIR /src
 COPY <<'EOF' /src/main.go
 package main
