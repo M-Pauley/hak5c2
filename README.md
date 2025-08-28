@@ -1,93 +1,138 @@
-![Docker Pulls](https://img.shields.io/docker/pulls/joshuapfritz/hak5c2?style=plastic)
+# Hak5 Cloud C2 – Distroless Docker Image (Multi-Stage, K8s-Friendly)
 
-This docker file and script have been updated to use a defined hostname using the environment variable "fqdn". If fqdn is not specified, it will revert to the container hostname. The image at [https://hub.docker.com/r/joshuapfritz/hak5c2](https://hub.docker.com/r/joshuapfritz/hak5c2) can be pulled using Docker or Kubernetes. It was created out of the need to generate device configurations using a Fully Qualified Domain Name and publicly accessable domain in a k8s cluster.
+This project builds a **minimal, non-root, distroless** container for Hak5 Cloud C2 with a tiny Go entrypoint that maps **environment variables → Cloud C2 flags**. It’s designed for clean local use (Docker/Podman) and seamless Kubernetes deployment (Traefik v3 CRDs, probes, non-root, PVC for DB).
 
-The image has also been updated to Alpine 3.21.3, Hak5c2 3.4.0, and related options.
+> ⚠️ You are responsible for complying with Hak5 Cloud C2 licensing and EULA. This image downloads the official archive **during build** from Hak5’s endpoint; no C2 binaries are stored in this repo.
 
-# 🐋 Alpine based hak5c² container
+---
 
-This image packs the amazing Hak5C² software into a secure and light weight alpine-linux based docker container.
+## What you get
 
-Quick start for local tests (assuming your local ip is 192.168.1.1):
+- **Multi-stage build**
+  - **fetch**: downloads & extracts the right `c2-*_{TARGET}` binary
+  - **wrap**: compiles a tiny Go entrypoint that converts env vars to C2 flags
+  - **final**: `distroless:nonroot` runtime (no shell, tiny attack surface)
 
-```sh
-docker volume create c2DB
-docker run -d -p 8080:8080 -p 2022:2022 -e db=/home/c2.db -v c2DB:/home --name hak5c2 --hostname=192.168.1.1 lindezagrey/hak5c2
+- **Non-root** (uid 65532), **read-only-friendly**, **PVC-ready** via `/data`
+
+- **Kubernetes-friendly**
+  - env→flag entrypoint (no wrapper script needed)
+  - compatible with HTTP probes and Traefik v3 IngressRoute/IngressRouteTCP
+  - single-replica guidance (SQLite DB on PVC)
+
+---
+
+## Build arguments
+
+| Arg              | Example                  | Purpose                                                  |
+|------------------|--------------------------|----------------------------------------------------------|
+| `RELEASE`        | `latest` or `3.4.0-stable` | Which Cloud C2 archive to fetch                          |
+| `TARGET`         | `amd64_linux`, `arm64_linux`, … | Which platform binary to copy                             |
+| `ALPINE_MIRROR`  | `http://mirrors.ocf.berkeley.edu` | (fetch stage only) Faster APK mirror for reliability     |
+
+**Examples:**
+
+```bash
+# x86_64 host
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+  --build-arg RELEASE=latest \
+  --build-arg TARGET=amd64_linux \
+  --build-arg ALPINE_MIRROR=http://mirrors.ocf.berkeley.edu \
+  -t local/cloudc2:dev .
+
+# Apple Silicon host
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+  --build-arg RELEASE=latest \
+  --build-arg TARGET=arm64_linux \
+  -t local/cloudc2:dev .
+
+
+## normal build (with a faster mirror)
+
+`
+DOCKER_BUILDKIT=1 docker build --progress=plain \
+  --build-arg RELEASE=latest \
+  --build-arg TARGET=amd64_linux \
+  --build-arg ALPINE_MIRROR=http://mirrors.ocf.berkeley.edu \
+  -t local/cloudc2:dev .
+  `
+
+## if your builder’s DNS is flaky, you can do
+
+`
+DOCKER_BUILDKIT=1 docker build --network=host --progress=plain \
+  --build-arg RELEASE=latest \
+  --build-arg TARGET=amd64_linux \
+  -t local/cloudc2:dev .
+  `
 ```
 
-## Build options
+## Runtime environment variables → C2 flags
 
-You can build the image by yourself with any of the provided docker compose files or with the docker build command. This will download the software and build the image.
+Set these as container env vars; the entrypoint turns them into Cloud C2 CLI flags.
 
-* Clone or download this repository
-* either build the image with ```docker build --rm -f "Dockerfile" -t hak5c2 .```
-* or if you use docker compose ```docker-compose -f "docker-compose.yml" up -d --build```
+| Env var            | Maps to flag        | Type    | Default       | Notes                                                                                 |
+| ------------------ | ------------------- | ------- | ------------- | ------------------------------------------------------------------------------------- |
+| `fqdn`             | `-hostname`         | string  | (auto)        | Preferred host name; otherwise falls back to `POD_IP` → `POD_NAME` → system hostname. |
+| `db`               | `-db`               | string  | `/data/c2.db` | SQLite DB path (PVC-backed in k8s examples).                                          |
+| `certFile`         | `-certFile`         | string  | —             | Path to TLS cert **inside the container**.                                            |
+| `keyFile`          | `-keyFile`          | string  | —             | Path to TLS key **inside the container**.                                             |
+| `setEdition`       | `-setEdition`       | string  | —             | Optional; edition string if needed.                                                   |
+| `listenip`         | `-listenip`         | string  | —             | e.g., `0.0.0.0`.                                                                      |
+| `listenport`       | `-listenport`       | string  | —             | HTTP listener port (container exposes 8080).                                          |
+| `sshport`          | `-sshport`          | string  | `2022`        | SSH relay port (container exposes 2022).                                              |
+| `reverseProxy`     | `-reverseProxy`     | boolean | off           | Presence enables reverse-proxy mode (use when behind Traefik/NGINX).                  |
+| `reverseProxyPort` | `-reverseProxyPort` | string  | —             | Only if your reverse proxy listens on a nonstandard port.                             |
+| `https`            | `-https`            | boolean | off\*         | Auto-enabled if both `certFile` & `keyFile` exist and are readable.                   |
+| `publicIP`         | `-publicIP`         | string  | —             | Optional public IP hint.                                                              |
+| `publicHostname`   | `-publicHostname`   | string  | —             | Optional public hostname hint.                                                        |
+| `bindInterface`    | `-bindInterface`    | string  | —             | Bind to a specific NIC.                                                               |
+| `setLicenseKey`    | `-setLicenseKey`    | secret  | —             | **Sensitive**; masked in logs.                                                        |
+| `recoverAccount`   | `-recoverAccount`   | secret  | —             | **Sensitive**; masked in logs.                                                        |
+| `setPass`          | `-setPass`          | secret  | —             | **Sensitive**; masked in logs.                                                        |
+| `debug`            | `-debug`            | boolean | off           | Presence enables debug.                                                               |
+| `v` / `verbose`    | `-v`                | boolean | off           | Presence enables verbose logging.                                                     |
+| `C2_EXTRA`         | (verbatim split)    | string  | —             | Escape hatch: space-separated flags appended as-is.                                   |
 
-Or for a quickstart you can use a prepared image from [Dockerhub](https://hub.docker.com/r/lindezagrey/hak5c2) which is based on this repository.
+Auto-https: if https is unset, but both certFile and keyFile exist, the entrypoint adds -https automatically.
 
-## Deployment options
+## Local usage (Docker)
 
-You can run the image directly with docker or with docker-compose (check the [examples](/examples) folder). It is possible to run the container without a volume, which means everything that is stored in C² is lost when the container is removed (including loot and licensing). On the other hand you can create a volume and map it so that the c2.db is persistent.
+`
+docker run -d --name cloudc2 \
+  -p 8080:8080 -p 2022:2022 \
+  -v c2-data:/data \
+  -e fqdn=localhost \
+  --restart unless-stopped \
+  local/cloudc2:dev
+`
 
-The easiest way to run a container locally (assuming you build it yourself) would be:
+### Run (HTTP only, no reverse proxy)
 
-```sh
-docker run -d --name hak5c2 hak5c2
-```
+`
+docker run -d --name cloudc2 \
+  -p 8080:8080 -p 2022:2022 \
+  -v c2-data:/data \
+  -v $(pwd)/certs:/tls:ro \
+  -e certFile=/tls/tls.crt \
+  -e keyFile=/tls/tls.key \
+  --restart unless-stopped \
+  local/cloudc2:dev
+`
 
-Then you will be able to access the webinterface by navigating to localhost:8080.
-To get the setup token you can run:
+Distroless has no shell. Change configuration via env vars and recreate the container.
+If bind-mounting a host path for /data, ensure it’s writable by uid 65532.
 
-```sh
-docker logs hak5c2 | grep "token"
-```
+#### Security notes
 
-If you want to run it externally accessible (e.g. on a VPS) you have to publish the ports 8080 and 2022 as well.
-The application will take the hostname of the container as the hostname argument. So if you made a DNS entry use the FQDN as hostname, if not then the public IP of your server.
+- The final image is distroless:nonroot (tiny surface, no shell, no package manager).
+- Scanners may flag the builder stage. Use one of:
+`FROM cgr.dev/chainguard/go:1.22 AS wrap (often 0 CVEs)`
+or pin a patched tag:
+`golang:1.22.7-alpine3.21 / golang:1.22.7-bookworm`
 
-```sh
-docker run -d -p 8080:8080 -p 2022:2022 --name hak5c2 --hostname=test.test.com hak5c2
-```
+You can emit SBOM/provenance on build:
 
-## Environment variables
-
-You can pass all parameters you would normally pass to the application to the container by adding them as an environment variable (except the hostname which is set by the docker "hostname" command):
-
-```sh
-docker run -d -e reverseProxy=True -e reverseProxyPort=443 --name hak5c2 hak5c2
-```
-
-```sh
-Usage of ./c2_community-linux-64:
-  -certFile string
-    	Custom SSL Certificate file (disabled letsencrypt)
-  -db string
-    	Path to the c2 database (default "c2.db")
-  -debug
-    	Enable server side debug logs. This will affect performance, only use while actively troubleshooting. Setting this sets -v automatically
-  -hostname string
-    	 REQUIRED - Hostname of server (ip or DNS name)
-  -https
-    	Enable https (requires ports 80 and 443)
-  -keyFile string
-    	Custom SSL Key file (disables letsencrypt)
-  -listenip string
-    	IP address to listen on (default "0.0.0.0")
-  -listenport string
-    	Port of the HTTP server (default "8080")
-  -recoverAccount string
-    	username to recover, specify a new password with -setPass
-  -reverseProxy
-    	If set, Cloud C2 will work behind a reverse proxy
-  -reverseProxyPort string
-    	If reverseProxyPort is set, this port will be the internet facing port the Cloud C2 will be available at
-  -setEdition string
-    	used to update a license key edition from the command line if UI fails
-  -setLicenseKey string
-    	 used to update a license key from the command line if UI fails
-  -setPass string
-    	password to set for user specified by name using the -recoverAccount argument
-  -sshport string
-    	Port of the SSH server (default "2022")
-  -v	Set to get timestamped stdout output
+```bash
+docker buildx build --sbom=true --provenance=true -t yourrepo/cloudc2:dev .
 ```

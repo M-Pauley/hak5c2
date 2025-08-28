@@ -1,0 +1,19 @@
+services:
+  cloudc2:
+    image: joshuapfritz/hak5c2:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "2022:2022"
+    volumes:
+      - c2-data:/data
+    environment:
+      # set what you need:
+      fqdn: "c2.example.com"
+      # setLicenseKey: "XXXXX-XXXXX"
+      listenip: "0.0.0.0"
+      listenport: "8080"
+      sshport: "2022"
+      # reverseProxy: "1"   # only if fronted by NGINX/Traefik on the host
+volumes:
+  c2-data:

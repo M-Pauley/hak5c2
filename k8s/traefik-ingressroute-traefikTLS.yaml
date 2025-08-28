@@ -1,0 +1,16 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: c2-websecure
+  namespace: devsec
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`c2.example.com`)
+      kind: Rule
+      services:
+        - name: cloudc2
+          port: 80
+  tls:
+    secretName: c2-tls       # k8s TLS secret in same namespace
