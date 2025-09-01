@@ -1,24 +1,25 @@
 # Hak5 Cloud C2 – Distroless Docker Image (Multi-Stage, K8s-Friendly)
 
-This project builds a **minimal, non-root, distroless** container for Hak5 Cloud C2 with a tiny Go entrypoint that maps **environment variables → Cloud C2 flags**. It’s designed for clean local use (Docker/Podman) and seamless Kubernetes deployment (Traefik v3 CRDs, probes, non-root, PVC for DB).
+This project builds a **minimal, non-root, distroless** container for Hak5 Cloud C2 with a tiny Go entrypoint that maps **environment variables → Cloud C2 flags**. It’s designed for Docker/Podman and seamless Kubernetes deployment (Traefik v3 CRDs, probes, non-root, PVC for DB).
 
 > ⚠️ You are responsible for complying with Hak5 Cloud C2 licensing and EULA. This image downloads the official archive **during build** from Hak5’s endpoint; no C2 binaries are stored in this repo.
 
 ---
 
-## What you get
+## How it's built
 
 - **Multi-stage build**
   - **fetch**: downloads & extracts the right `c2-*_{TARGET}` binary
   - **wrap**: compiles a tiny Go entrypoint that converts env vars to C2 flags
   - **final**: `distroless:nonroot` runtime (no shell, tiny attack surface)
 
-- **Non-root** (uid 65532), **read-only-friendly**, **PVC-ready** via `/data`
+- **Non-root** (uid 65532), **read-only-friendly**, **PVC-ready** via `/data`(or configurable location).
 
 - **Kubernetes-friendly**
-  - env→flag entrypoint (no wrapper script needed)
+  - env→flag entrypoints placed in configmap.yaml(no wrapper script needed)
   - compatible with HTTP probes and Traefik v3 IngressRoute/IngressRouteTCP
   - single-replica guidance (SQLite DB on PVC)
+  - Use secrets for secure variables (SSL/TLS keys, product licensing, initial user credentials)
 
 ---
 
@@ -30,46 +31,10 @@ This project builds a **minimal, non-root, distroless** container for Hak5 Cloud
 | `TARGET`         | `amd64_linux`, `arm64_linux`, … | Which platform binary to copy                             |
 | `ALPINE_MIRROR`  | `http://mirrors.ocf.berkeley.edu` | (fetch stage only) Faster APK mirror for reliability     |
 
-**Examples:**
-
-```bash
-# x86_64 host
-DOCKER_BUILDKIT=1 docker build --progress=plain \
-  --build-arg RELEASE=latest \
-  --build-arg TARGET=amd64_linux \
-  --build-arg ALPINE_MIRROR=http://mirrors.ocf.berkeley.edu \
-  -t local/cloudc2:dev .
-
-# Apple Silicon host
-DOCKER_BUILDKIT=1 docker build --progress=plain \
-  --build-arg RELEASE=latest \
-  --build-arg TARGET=arm64_linux \
-  -t local/cloudc2:dev .
-
-
-## normal build (with a faster mirror)
-
-`
-DOCKER_BUILDKIT=1 docker build --progress=plain \
-  --build-arg RELEASE=latest \
-  --build-arg TARGET=amd64_linux \
-  --build-arg ALPINE_MIRROR=http://mirrors.ocf.berkeley.edu \
-  -t local/cloudc2:dev .
-  `
-
-## if your builder’s DNS is flaky, you can do
-
-`
-DOCKER_BUILDKIT=1 docker build --network=host --progress=plain \
-  --build-arg RELEASE=latest \
-  --build-arg TARGET=amd64_linux \
-  -t local/cloudc2:dev .
-  `
-```
 
 ## Runtime environment variables → C2 flags
 
-Set these as container env vars; the entrypoint turns them into Cloud C2 CLI flags.
+Set these as container env vars; the entrypoint turns them into Cloud C2 install CLI arguments.
 
 | Env var            | Maps to flag        | Type    | Default       | Notes                                                                                 |
 | ------------------ | ------------------- | ------- | ------------- | ------------------------------------------------------------------------------------- |
@@ -92,7 +57,7 @@ Set these as container env vars; the entrypoint turns them into Cloud C2 CLI fla
 | `setPass`          | `-setPass`          | secret  | —             | **Sensitive**; masked in logs.                                                        |
 | `debug`            | `-debug`            | boolean | off           | Presence enables debug.                                                               |
 | `v` / `verbose`    | `-v`                | boolean | off           | Presence enables verbose logging.                                                     |
-| `C2_EXTRA`         | (verbatim split)    | string  | —             | Escape hatch: space-separated flags appended as-is.                                   |
+| `C2_EXTRA`         | (verbatim split)    | string  | —             | Space-separated flags appended as-is for future additions.                            |
 
 Auto-https: if https is unset, but both certFile and keyFile exist, the entrypoint adds -https automatically.
 
@@ -104,7 +69,7 @@ docker run -d --name cloudc2 \
   -v c2-data:/data \
   -e fqdn=localhost \
   --restart unless-stopped \
-  local/cloudc2:dev
+  joshuapfritz/hak5c2:latest
 `
 
 ### Run (HTTP only, no reverse proxy)
@@ -117,7 +82,7 @@ docker run -d --name cloudc2 \
   -e certFile=/tls/tls.crt \
   -e keyFile=/tls/tls.key \
   --restart unless-stopped \
-  local/cloudc2:dev
+  joshuapfritz/hak5c2:latest
 `
 
 Distroless has no shell. Change configuration via env vars and recreate the container.
