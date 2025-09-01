@@ -13,8 +13,9 @@ This folder contains manifests for deploying Cloud C2 behind **Traefik v3** usin
   - `web` → :80
   - `websecure` → :443 (TLS enabled)
   - `ssh` → :2022 (TCP)
-- A TLS cert secret (e.g., `c2-tls`) in the app namespace for HTTPS at Traefik
 - A default `StorageClass` for the PVC or specify one
+If using HTTPS:
+- A TLS cert secret (e.g., `c2-tls`) in the app namespace for HTTPS at Traefik
 
 > If you manage Traefik with Helm, add an extra entrypoint:
 >
@@ -33,15 +34,14 @@ This folder contains manifests for deploying Cloud C2 behind **Traefik v3** usin
 
 ## What’s included
 
-- `00-namespace.yaml` (optional) – creates `devsec`
-- `10-configmap.yaml` – non-secret env (e.g., `reverseProxy=1`, ports)
-- `20-secret.yaml` – secrets like `setLicenseKey` (**use SOPS/KSOPS in Git**)
-- `30-pvc.yaml` – `ReadWriteOnce` PVC for `/data` (SQLite DB)
-- `40-deployment.yaml` – distroless, non-root container, probes, env wiring
-- `50-service.yaml` – ClusterIP Service exposing HTTP (80) + SSH (2022)
-- `60-traefik-mw-redirect.yaml` – `Middleware` to redirect HTTP→HTTPS
-- `70-traefik-ingressroute.yaml` – `IngressRoute` for web & websecure
-- `80-traefik-ingressroute-tcp.yaml` – `IngressRouteTCP` for SSH relay (2022)
+- `configmap.yaml` – non-secret env (e.g., `reverseProxy=1`, ports)
+- `secrets.yaml` – secrets like `setLicenseKey` (**use SOPS/KSOPS in Git**)
+- `pvc.yaml` – `ReadWriteOnce` PVC for `/data` (SQLite DB)
+- `deployment.yaml` – distroless, non-root container, probes, env wiring
+- `service.yaml` – ClusterIP Service exposing HTTP (80) + SSH (2022)
+- `traefik-mwiddleware.yaml` – `Middleware` to redirect HTTP→HTTPS
+- `traefik-ingressroute.yaml` – `IngressRoute` for web & websecure
+- `traefik-ingressroute-tcp.yaml` – `IngressRouteTCP` for SSH relay (2022)
 
 ---
 
@@ -49,21 +49,21 @@ This folder contains manifests for deploying Cloud C2 behind **Traefik v3** usin
 
 ```bash
 # 1) Namespace (optional)
-kubectl apply -f 00-namespace.yaml
+kubectl create namespace devsec
 
 # 2) Config + Secret + Storage
-kubectl apply -f 10-configmap.yaml
-kubectl apply -f 20-secret.yaml
-kubectl apply -f 30-pvc.yaml
+kubectl apply -f configmap.yaml
+kubectl apply -f secret.yaml
+kubectl apply -f pvc.yaml
 
 # 3) App + Service
-kubectl apply -f 40-deployment.yaml
-kubectl apply -f 50-service.yaml
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
 
 # 4) Traefik routes (HTTP→HTTPS + TCP 2022)
-kubectl apply -f 60-traefik-mw-redirect.yaml
-kubectl apply -f 70-traefik-ingressroute.yaml
-kubectl apply -f 80-traefik-ingressroute-tcp.yaml
+kubectl apply -f traefik-middleware.yaml
+kubectl apply -f traefik-ingressroute.yaml
+kubectl apply -f traefik-ingressroute-tcp.yaml
 ```
 
 ## Key settings to review
